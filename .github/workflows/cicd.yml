@@ -4,8 +4,6 @@ on:
   push:
     branches: [ "main" ]
 
- 
-
 jobs:
   Compile:
     runs-on: self-hosted
@@ -29,18 +27,17 @@ jobs:
     
     - name: trivy installation
       run: |
-          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-           echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-           sudo apt-get update -y
-           sudo apt-get install trivy -y
+        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update -y
+        sudo apt-get install trivy -y
     - name: Trivy FS Scan
-      run : trivy fs --format table -o fs-report.json .
+      run: trivy fs --format table -o fs-report.json .
       
-
-    - name : gitleaks Installation
+    - name: gitleaks Installation
       run: sudo apt install gitleaks -y
-    - name : Gitleaks Code Scan
+    - name: Gitleaks Code Scan
       run: gitleaks detect -r git-source . -r gitleaks-report.json -f json
       
   test:
@@ -75,6 +72,12 @@ jobs:
     - name: Build project
       run: mvn package
 
+    - name: Upload JAR artifact 
+      uses: actions/upload-artifact@v4 
+      with: 
+        name: app-jar 
+        path: target/*.jar
+       
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@v5.3.0
       env:
@@ -90,8 +93,30 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-
-
-     
-
-   
+  build-docker-image-and-push:
+    runs-on: self-hosted
+    needs: build-project-and-sonar-scan
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download JAR artifact 
+      uses: actions/download-artifact@v4 
+      with: 
+        name: app-jar 
+        path: app # this will download JAR to ./app folder
+      
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: true
+        tags: innocenttech/bankapp:latest
