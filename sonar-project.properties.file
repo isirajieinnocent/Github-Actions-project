@@ -1,3 +1,2 @@
 sonar.projectKey=GC-Bank-Project
 sonar.projectName=GC-Bank-Project
-sonar.java.binaries=.
